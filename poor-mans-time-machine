@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+"""Usage: poor-mans-time-machine [-e PATH]... [-p PREFIX] [-r PATH] SRC DEST
+
+  -h --help           Show this help
+  -e --exclude PATH   Exclude paths [default: /dev /media /mnt /proc /sys]
+  -p --prefix PREFIX  Name prefix of the rotated backup directory [default: backup]
+  -r --rsync PATH     Path to rsync command [default: rsync]
+"""
+import os
+import re
+import subprocess
+import sys
+
+from docopt import docopt
+
+
+def rotate(destination, prefix):
+    name_re = re.compile('^{}(?:\.[0-9]+)?$'.format(prefix))
+
+    def _key(name):
+        return [int(char) if char.isdigit() else char
+                for char in re.split('([0-9]+)', name)]
+
+    rotated = None
+
+    for name in sorted(os.listdir(destination), key=_key, reverse=True):
+        path = os.path.join(destination, name)
+
+        if not os.path.isdir(path) or not name_re.match(name):
+            continue
+
+        suffix = str(int(name.partition('.')[-1] or 0) + 1)
+        rotated = os.path.join(destination, prefix + '.' + suffix)
+
+        os.rename(path, rotated)
+
+    target = os.path.join(destination, prefix)
+
+    os.mkdir(target)
+
+    return target, rotated
+
+
+def sync(rsync, source, destination, link_dest=None, exclude=None):
+    command = [rsync, '-v', '-a', '--no-D', '--delete']
+
+    if link_dest:
+        command.extend(['--link-dest', link_dest])
+
+    exclude = exclude or []
+
+    if exclude:
+        command.extend([arg for path in exclude for arg in ['--exclude', path]])
+
+    if os.path.isdir(source) and source[-1] != '/':
+        source += '/'
+
+    command.extend([source, destination])
+
+    subprocess.check_call(command)
+
+
+if __name__ == '__main__':
+    args = docopt(__doc__)
+
+    source = os.path.abspath(args['SRC'])
+    destination = os.path.abspath(args['DEST'])
+    exclude = args['--exclude']
+    prefix = args['--prefix']
+    rsync = args['--rsync']
+
+    if not os.path.isdir(destination):
+        sys.exit('Destination {} is not a valid directory'.format(destination))
+
+    if not os.path.exists(source):
+        sys.exit('Source {} does not exist'.format(source))
+
+    destination, link_dest = rotate(destination, prefix)
+
+    # Exit values (rsync):
+    # 0 -- Success
+    # 24 -- Partial transfer due to vanished source files
+    try:
+        sync(rsync, source, destination, link_dest=link_dest, exclude=exclude)
+    except subprocess.CalledProcessError, e:
+        if e.returncode != 24:
+            raise
