@@ -1,8 +1,11 @@
 #!/usr/bin/env python
-"""Usage: poor-mans-time-machine [-e PATH]... [-p PREFIX] [-r PATH] SRC DEST
+"""Usage: poor-mans-time-machine [-c NAME] [-e PATH]... [-l LIMIT] [-p PREFIX] [-r PATH] SRC DEST
 
   -h --help           Show this help
+  -c --canary NAME    Name of a file stored in the rotated backup directory to
+                      signify a successful run [default: .poor-mans-time-machine-ok]
   -e --exclude PATH   Exclude paths [default: /dev /media /mnt /proc /sys]
+  -l --limit LIMIT    Number of rotated backup directories to keep
   -p --prefix PREFIX  Name prefix of the rotated backup directory [default: backup]
   -r --rsync PATH     Path to rsync command [default: rsync]
 """
@@ -10,39 +13,44 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 from docopt import docopt
 
 
-def rotate(destination, prefix):
-    name_re = re.compile('^{}(?:\.[0-9]+)?$'.format(prefix))
+def backups(destination, prefix):
+    name_re = re.compile(r'^{}(?:\.[0-9]+)?$'.format(prefix))
 
     def _key(name):
         return [int(char) if char.isdigit() else char
-                for char in re.split('([0-9]+)', name)]
+                for char in re.split(r'([0-9]+)', name)]
 
-    rotated = None
+    paths = []
 
-    for name in sorted(os.listdir(destination), key=_key, reverse=True):
+    for name in sorted(os.listdir(destination), key=_key):
         path = os.path.join(destination, name)
 
-        if not os.path.isdir(path) or not name_re.match(name):
-            continue
+        if os.path.isdir(path) and name_re.match(name):
+            paths.append(path)
 
-        suffix = str(int(name.partition('.')[-1] or 0) + 1)
-        rotated = os.path.join(destination, prefix + '.' + suffix)
+    return paths
+
+
+def rotate(paths):
+    for _ in range(len(paths)):
+        path = paths.pop()
+
+        prefix, _, suffix = os.path.basename(path).partition('.')
+        suffix = str(int(suffix or 0) + 1)
+        rotated = os.path.join(os.path.dirname(path), prefix + '.' + suffix)
 
         os.rename(path, rotated)
 
-    target = os.path.join(destination, prefix)
-
-    os.mkdir(target)
-
-    return target, rotated
+        paths.insert(0, rotated)
 
 
 def sync(rsync, source, destination, link_dest=None, exclude=None):
-    command = [rsync, '-v', '-a', '--no-D', '--delete']
+    command = [rsync, '-v', '-a', '--no-D', '--delete', '--ignore-existing']
 
     if link_dest:
         command.extend(['--link-dest', link_dest])
@@ -52,12 +60,27 @@ def sync(rsync, source, destination, link_dest=None, exclude=None):
     if exclude:
         command.extend([arg for path in exclude for arg in ['--exclude', path]])
 
-    if os.path.isdir(source) and source[-1] != '/':
-        source += '/'
+    if os.path.isdir(source) and source[-1] != os.path.sep:
+        source += os.path.sep
 
     command.extend([source, destination])
 
     subprocess.check_call(command)
+
+
+def touch(path, times=None):
+    with open(path, 'a'):
+        os.utime(path, times)
+
+
+def delete(rsync, directory):
+    empty = tempfile.mkdtemp() + os.path.sep
+
+    command = [rsync, '-v', '-r', '--delete', empty, directory]
+
+    subprocess.check_call(command)
+    os.rmdir(directory)
+    os.rmdir(empty)
 
 
 if __name__ == '__main__':
@@ -65,7 +88,9 @@ if __name__ == '__main__':
 
     source = os.path.abspath(args['SRC'])
     destination = os.path.abspath(args['DEST'])
+    canary = args['--canary']
     exclude = args['--exclude']
+    limit = int(args['--limit'] or 0)
     prefix = args['--prefix']
     rsync = args['--rsync']
 
@@ -75,13 +100,25 @@ if __name__ == '__main__':
     if not os.path.exists(source):
         sys.exit('Source {} does not exist'.format(source))
 
-    destination, link_dest = rotate(destination, prefix)
+    paths = backups(destination, prefix)
+    destination = os.path.join(destination, prefix)
+
+    if paths and os.path.exists(os.path.join(paths[0], canary)):
+        rotate(paths)
+    else:
+        paths.insert(0, None)  # Dummy link_dest
 
     # Exit values (rsync):
     # 0 -- Success
     # 24 -- Partial transfer due to vanished source files
     try:
-        sync(rsync, source, destination, link_dest=link_dest, exclude=exclude)
+        sync(rsync, source, destination, link_dest=paths[0], exclude=exclude)
     except subprocess.CalledProcessError, e:
         if e.returncode != 24:
             raise
+
+    touch(os.path.join(destination, canary))
+
+    if limit and paths[0]:   # Remove only if rotated
+        for path in paths[limit:]:
+            delete(rsync, path)

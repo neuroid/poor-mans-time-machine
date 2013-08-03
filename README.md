@@ -7,10 +7,13 @@ A simple tool for performing local incremental backups.
 Usage
 -----
 
-    Usage: poor-mans-time-machine [-e PATH]... [-p PREFIX] [-r PATH] SRC DEST
+    Usage: poor-mans-time-machine [-c NAME] [-e PATH]... [-l LIMIT] [-p PREFIX] [-r PATH] SRC DEST
 
       -h --help           Show this help
+      -c --canary NAME    Name of a file stored in the rotated backup directory to
+                          signify a successful run [default: .poor-mans-time-machine-ok]
       -e --exclude PATH   Exclude paths [default: /dev /media /mnt /proc /sys]
+      -l --limit LIMIT    Number of rotated backup directories to keep
       -p --prefix PREFIX  Name prefix of the rotated backup directory [default: backup]
       -r --rsync PATH     Path to rsync command [default: rsync]
 
@@ -27,7 +30,12 @@ The above will:
 3. synchronize `/` to `/media/usbdisk/backup` using rsync.
 
 The synchronization uses `--link-dest=/media/usbdisk/backup.1` to copy only the
-files that were modified/added since the previous run.
+files that were modified or added since the previous run.
+
+Each successful backup is marked with a "canary" file. No directory rotation is
+performed if the file is missing from the latest backup directory. This allows
+to resume interrupted backups and guards against removal of older backups after
+a failed run (when `--limit` is applied).
 
 
 Requirements
