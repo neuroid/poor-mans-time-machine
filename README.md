@@ -21,7 +21,7 @@ Usage
 Example
 -------
 
-    ./poor-mans-time-machine / /media/usbdisk
+    poor-mans-time-machine / /media/usbdisk
 
 The above will:
 
