@@ -4,7 +4,7 @@
   -h --help           Show this help
   -c --canary NAME    Name of a file stored in the rotated backup directory to
                       signify a successful run [default: .poor-mans-time-machine-ok]
-  -e --exclude PATH   Exclude paths [default: /dev /media /mnt /proc /sys]
+  -e --exclude PATH   Exclude paths [default: /dev /media /mnt /proc /run /sys /tmp]
   -l --limit LIMIT    Number of rotated backup directories to keep
   -p --prefix PREFIX  Name prefix of the rotated backup directory [default: backup]
   -r --rsync PATH     Path to rsync command [default: rsync]
