@@ -103,8 +103,9 @@ if __name__ == '__main__':
     paths = backups(destination, prefix)
     destination = os.path.join(destination, prefix)
 
-    if paths and os.path.exists(os.path.join(paths[0], canary)):
-        rotate(paths)
+    if paths:
+        if os.path.exists(os.path.join(paths[0], canary)):
+            rotate(paths)
     else:
         paths.insert(0, None)  # Dummy link_dest
 
