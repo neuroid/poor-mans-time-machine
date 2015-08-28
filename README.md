@@ -38,8 +38,8 @@ to resume interrupted backups and guards against removal of older backups after
 a failed run (when `--limit` is applied).
 
 
-Requirements
+Installation
 ------------
 
     aptitude install rsync
-    pip install docopt
+    pip install git+https://github.com/neuroid/poor-mans-time-machine.git
