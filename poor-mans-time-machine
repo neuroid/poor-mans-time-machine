@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     source = os.path.abspath(args['SRC'])
     destination = os.path.abspath(args['DEST'])
-    canary = args['--canary']
+    canary = os.path.basename(args['--canary'])
     exclude = args['--exclude']
     limit = int(args['--limit'] or 0)
     prefix = args['--prefix']
@@ -107,6 +107,8 @@ if __name__ == '__main__':
         rotate(paths)
     else:
         paths.insert(0, None)  # Dummy link_dest
+
+    exclude.append('/' + canary)
 
     # Exit values (rsync):
     # 0 -- Success
