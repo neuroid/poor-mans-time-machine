@@ -41,5 +41,5 @@ a failed run (when `--limit` is applied).
 Installation
 ------------
 
-    aptitude install rsync
+    apt install rsync
     pip install git+https://github.com/neuroid/poor-mans-time-machine.git
