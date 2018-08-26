@@ -15,11 +15,11 @@ import sys
 
 from docopt import docopt
 
-from .. import backups
-from .. import delete
-from .. import rotate
-from .. import sync
-from .. import touch
+from . import backups
+from . import delete
+from . import rotate
+from . import sync
+from . import touch
 
 
 def main():
